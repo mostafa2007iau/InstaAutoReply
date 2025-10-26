@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
@@ -27,5 +26,39 @@ echo "Activating virtual environment and installing dependencies..."
 source venv/bin/activate
 pip install -r requirements.txt
 
+# 5. Create systemd service file
+echo "Creating systemd service file..."
+PROJECT_DIR=$(pwd)
+USER=$(whoami)
+
+sudo tee /etc/systemd/system/instaautoreply.service > /dev/null <<EOF
+[Unit]
+Description=InstaAutoReply Service
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8008
+Restart=always
+RestartSec=10
+Environment="PATH=$PROJECT_DIR/venv/bin"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 6. Reload systemd, enable and start the service
+echo "Enabling and starting instaautoreply service..."
+sudo systemctl daemon-reload
+sudo systemctl enable instaautoreply.service
+sudo systemctl start instaautoreply.service
+
 echo "--- Installation Complete ---"
-echo "To run the service, activate the virtual environment with 'source venv/bin/activate' and then run 'uvicorn main:app --host 0.0.0.0 --port 8008'."
+echo "Service status:"
+sudo systemctl status instaautoreply.service --no-pager
+echo ""
+echo "The service is now running and will start automatically on boot."
+echo "To check service status: sudo systemctl status instaautoreply.service"
+echo "To view logs: sudo journalctl -u instaautoreply.service -f"
