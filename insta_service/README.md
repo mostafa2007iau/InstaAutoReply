@@ -1,39 +1,137 @@
 # Instagram Automation Service
 
-A simple, lightweight REST API service to automate Instagram interactions like replying to comments and sending DMs. Designed for easy integration with tools like n8n.
+A simple, lightweight REST API service designed to automate Instagram interactions like replying to comments and sending DMs. It is built to be simple, stateless (using local JSON files for session storage), and easy to integrate with automation platforms like n8n.
+
+---
+
+<div dir="rtl">
+
+# سرویس اتوماسیون اینستاگرام
+
+یک سرویس REST API ساده، سبک و کارآمد برای اتوماسیون فعالیت‌های اینستاگرام مانند پاسخ به کامنت‌ها و ارسال دایرکت مسیج. این سرویس برای اتصال آسان به ابزارهای اتومیشن مانند n8n طراحی شده است.
+
+## 🎯 قابلیت‌های کلیدی
+
+-   **ورود چند اکانت**: مدیریت همزمان چندین حساب کاربری اینستاگرام.
+-   **دریافت کامنت‌ها**: دریافت آخرین کامنت‌های یک پست مشخص.
+-   **پاسخ به کامنت**: ریپلای خودکار به یک کامنت خاص.
+-   **ارسال دایرکت**: ارسال پیام مستقیم (DM) به هر کاربر.
+-   **مدیریت نشست (Session)**: نشست‌ها به صورت فایل `accounts.json` در کنار پروژه ذخیره می‌شوند تا از لاگین‌های مکرر جلوگیری شود.
+-   **کنترل نرخ درخواست (Rate Limiting)**: دارای محدودیت زمانی بین درخواست‌ها برای جلوگیری از مسدود شدن اکانت.
+-   **جلوگیری از پاسخ تکراری**: با ذخیره تاریخچه در `replied.json`، از پاسخ مجدد به یک کامنت جلوگیری می‌شود.
+
+## 🧰 نصب و اجرا روی سرور
+
+### پیش‌نیازها
+-   سرور (ترجیحاً Debian/Ubuntu)
+-   Python 3.10+
+-   `git`
+
+### مراحل نصب
+
+۱. **کلون کردن پروژه:**
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/insta_service.git
+   cd insta_service
+   ```
+
+۲. **اجرای اسکریپت نصب خودکار:**
+   این اسکریپت پایتون، `venv` و وابستگی‌ها را به صورت خودکار نصب می‌کند.
+   ```bash
+   bash install.sh
+   ```
+
+۳. **فعال‌سازی محیط مجازی:**
+   ```bash
+   source venv/bin/activate
+   ```
+
+۴. **اجرای سرویس:**
+   برای اجرای سرویس در پس‌زمینه و مقاوم‌سازی در برابر خاموش شدن ترمینال، از `nohup` استفاده کنید:
+   ```bash
+   nohup uvicorn main:app --host 0.0.0.0 --port 8008 &
+   ```
+   سرویس روی آدرس `http://YOUR_SERVER_IP:8008` در دسترس خواهد بود.
+
+## 📡 دسترسی به APIها
+
+| متد    | مسیر        | توضیحات                                       |
+| :----- | :----------- | :--------------------------------------------- |
+| `GET`  | `/status`    | بررسی وضعیت سرویس و لیست اکانت‌های لاگین‌شده. |
+| `POST` | `/login`     | ورود به یک اکانت و ذخیره نشست آن.             |
+| `GET`  | `/accounts`  | دریافت لیست تمام اکانت‌های متصل.                |
+| `GET`  | `/comments`  | دریافت کامنت‌های یک پست از طریق URL.           |
+| `POST` | `/reply`     | پاسخ به یک کامنت مشخص.                         |
+| `POST` | `/dm`        | ارسال پیام دایرکت به یک کاربر.                  |
+
+## 🧩 اتصال به n8n
+
+برای اتصال این سرویس به n8n، از نود **HTTP Request** استفاده کنید:
+
+-   **URL**: آدرس اندپوینت مورد نظر، مثلاً: `http://192.168.1.50:8008/reply`
+-   **Method**: متد درخواست (`POST` یا `GET`)
+-   **Body Content Type**: `JSON`
+-   **Body**: داده‌های مورد نیاز را در قالب JSON ارسال کنید. می‌توانید از خروجی نودهای قبلی برای پر کردن مقادیر استفاده کنید.
+
+**مثال برای ریپلای:**
+```json
+{
+  "username": "my_insta_account",
+  "comment_id": "{{ $json.comment_id }}",
+  "text": "از کامنت شما متشکریم! 🙌"
+}
+```
+
+</div>
+
+---
+
+# English Documentation
 
 ## 🎯 Core Features
 
--   **Multi-Account Login**: Manage sessions for multiple Instagram accounts.
+-   **Multi-Account Login**: Manage sessions for multiple Instagram accounts simultaneously.
 -   **Comment Fetching**: Get the latest comments from any public post.
 -   **Comment Replies**: Reply to a specific comment.
 -   **Direct Messages**: Send a DM to any Instagram user.
--   **Session Management**: Sessions are stored locally in `accounts.json`.
--   **Rate Limiting**: Simple sleep intervals to avoid account bans.
--   **Duplicate Prevention**: Keeps track of replied comments in `replied.json`.
+-   **Session Management**: Sessions are stored locally in `accounts.json` to persist logins.
+-   **Rate Limiting**: Includes delays and hourly limits to prevent account bans.
+-   **Duplicate Prevention**: Tracks replied comments in `replied.json` to avoid sending the same reply twice.
 
-## ⚙️ Project Structure
+## 🧰 Installation and Server Deployment
 
-```
-insta_service/
-├── main.py              # Main FastAPI application
-├── accounts.json        # Stores account session data
-├── replied.json         # Stores IDs of replied comments
-├── requirements.txt     # Python dependencies
-├── Dockerfile           # For containerized deployment
-└── README.md            # This file
-```
+### Prerequisites
+-   A server (Debian/Ubuntu recommended)
+-   Python 3.10+
+-   `git`
 
-## 🧠 Tech Stack
+### Installation Steps
 
--   **Web Framework**: FastAPI
--   **Instagram Library**: `instagrapi`
--   **Web Server**: Uvicorn
--   **Datastore**: Simple JSON files (no external database needed)
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/insta_service.git
+    cd insta_service
+    ```
+
+2.  **Run the automated installation script:**
+    This script will install Python, `venv`, and all required dependencies.
+    ```bash
+    bash install.sh
+    ```
+
+3.  **Activate the virtual environment:**
+    ```bash
+    source venv/bin/activate
+    ```
+
+4.  **Run the service:**
+    To run the service persistently in the background, use `nohup`:
+    ```bash
+    nohup uvicorn main:app --host 0.0.0.0 --port 8008 &
+    ```
+    The service will be available at `http://YOUR_SERVER_IP:8008`.
 
 ## 📡 API Endpoints
-
-The service runs on `http://YOUR_SERVER_IP:8008`.
 
 | Method | Path         | Description                                     |
 | :----- | :----------- | :---------------------------------------------- |
@@ -44,106 +142,20 @@ The service runs on `http://YOUR_SERVER_IP:8008`.
 | `POST` | `/reply`     | Reply to a specific comment.                    |
 | `POST` | `/dm`        | Send a direct message to a user.                |
 
-## 🧰 Installation and Setup
-
-### Prerequisites
--   Python 3.10+
--   `git`
-
-### Local Setup
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/insta_service.git
-    cd insta_service
-    ```
-
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Run the service:**
-    ```bash
-    uvicorn main:app --host 0.0.0.0 --port 8008
-    ```
-
-The service will be available at `http://YOUR_SERVER_IP:8008`.
-
-### Docker Setup
-
-1.  **Build the Docker image:**
-    ```bash
-    docker build -t insta-service .
-    ```
-
-2.  **Run the Docker container:**
-    ```bash
-    docker run -d -p 8008:8008 --name insta-service-container insta-service
-    ```
-    Data (`accounts.json`, `replied.json`) will be stored inside the container. For persistent storage, use volumes:
-    ```bash
-    docker run -d -p 8008:8008 \
-      -v $(pwd)/accounts.json:/app/accounts.json \
-      -v $(pwd)/replied.json:/app/replied.json \
-      --name insta-service-container insta-service
-    ```
-
-## 💬 API Usage Examples
-
-### 1. Login an Account
-
-**Request:** `POST /login`
-
-**Body:**
-```json
-{
-  "username": "my_insta_account",
-  "password": "my_secret_password"
-}
-```
-
-### 2. Get Post Comments
-
-**Request:** `GET /comments?username=my_insta_account&url=https://www.instagram.com/p/Cxyz123abc/`
-
-### 3. Reply to a Comment
-
-**Request:** `POST /reply`
-
-**Body:**
-```json
-{
-  "username": "my_insta_account",
-  "comment_id": "12345678901234567",
-  "text": "Thanks for your comment! 🙌"
-}
-```
-
-### 4. Send a Direct Message
-
-**Request:** `POST /dm`
-
-**Body:**
-```json
-{
-  "username": "my_insta_account",
-  "target_username": "some_user",
-  "message": "Hello, we saw your comment and wanted to reach out."
-}
-```
-
 ## 🧩 n8n Integration
 
 You can easily connect this service to an n8n workflow using the **HTTP Request** node.
 
--   **URL**: `http://YOUR_SERVER_IP:8008/<endpoint>` (e.g., `http://192.168.1.50:8008/reply`)
+-   **URL**: The endpoint you want to target, e.g., `http://192.168.1.50:8008/reply`
 -   **Method**: `POST` or `GET`
 -   **Body Content Type**: `JSON`
--   **Body**: Use expressions to pass data from previous nodes, like comment IDs or user-generated text.
+-   **Body**: Use expressions to pass data from previous nodes.
+
+**Example for a Reply Node:**
+```json
+{
+  "username": "my_insta_account",
+  "comment_id": "{{ $json.comment_id }}",
+  "text": "Thanks for your comment! 🙌"
+}
+```
