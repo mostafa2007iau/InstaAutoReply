@@ -6,10 +6,13 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from instagrapi import Client
 from instagrapi.exceptions import LoginRequired
+SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 # --- Configuration ---
-ACCOUNTS_FILE = Path("accounts.json")
-REPLIED_FILE = Path("replied.json")
+ACCOUNTS_FILE = SCRIPT_DIR / "accounts.json"
+REPLIED_FILE = SCRIPT_DIR / "replied.json"
+
 RATE_LIMIT_DELAY = 5  # seconds
 HOURLY_REPLY_LIMIT = 30
 
