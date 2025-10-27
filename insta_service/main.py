@@ -21,10 +21,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+from typing import Optional, Dict, Any
+from pydantic import model_validator
+
 # --- Pydantic Models for Request Bodies ---
 class LoginPayload(BaseModel):
     username: str
-    password: str
+    password: Optional[str] = None
+    session_json: Optional[str] = None
+    session_dict: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_one_auth_method(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            auth_methods = [
+                data.get('password'),
+                data.get('session_json'),
+                data.get('session_dict')
+            ]
+            if sum(x is not None for x in auth_methods) != 1:
+                raise ValueError("Exactly one of 'password', 'session_json', or 'session_dict' must be provided.")
+        return data
 
 class ChallengePayload(BaseModel):
     username: str
@@ -124,27 +142,41 @@ def get_status():
 @app.post("/login", summary="Login an Instagram Account")
 def login(payload: LoginPayload):
     """
-    Logs in an Instagram account.
+    Logs in an Instagram account using password, session JSON, or session dictionary.
     If a challenge is required, it saves the temporary state for resolution.
     """
     cl = Client()
     try:
-        cl.login(payload.username, payload.password)
+        if payload.password:
+            cl.login(payload.username, payload.password)
+        elif payload.session_json:
+            session = json.loads(payload.session_json)
+            cl.set_settings(session)
+            cl.login_by_sessionid(session["sessionid"])
+        elif payload.session_dict:
+            cl.set_settings(payload.session_dict)
+            cl.login_by_sessionid(payload.session_dict["sessionid"])
+
+        # Verify session is valid
+        cl.get_timeline_feed()
+
         accounts = load_accounts()
         accounts[payload.username] = cl.get_settings()
         save_accounts(accounts)
         return {"status": "success", "username": payload.username}
-    except ChallengeRequired as e:
+    except ChallengeRequired:
         challenges = load_challenges()
         challenges[payload.username] = cl.get_settings()
         save_challenges(challenges)
         raise HTTPException(
             status_code=401,
             detail={
-                "message": "Challenge required. Please solve the challenge and use the /challenge/resolve endpoint.",
+                "message": "Challenge required. Please use the /challenge/resolve endpoint.",
                 "username": payload.username,
             }
         )
+    except LoginRequired:
+         raise HTTPException(status_code=403, detail="The provided session is invalid or expired.")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {str(e)}")
 
@@ -182,16 +214,30 @@ def get_accounts():
     return {"accounts": list(accounts.keys())}
 
 @app.get("/comments", summary="Get Post Comments")
-def get_comments(username: str = Query(...), url: str = Query(...)):
+def get_comments(
+    username: str = Query(...),
+    url: str = Query(...),
+    amount: Optional[int] = Query(None, description="Number of recent comments to fetch."),
+    fetch_all: bool = Query(False, description="Set to true to fetch all comments.")
+):
     """
-    Fetches the latest comments for a specific Instagram post.
+    Fetches comments for a specific Instagram post.
     - **username**: The account to use for the request.
     - **url**: The URL of the Instagram post.
+    - **amount**: Fetches the specified number of the most recent comments.
+    - **fetch_all**: If true, fetches all comments on the post.
     """
     cl = get_client(username)
     try:
         media_id = cl.media_id(cl.media_pk_from_url(url))
-        comments = cl.media_comments(media_id)
+        if fetch_all:
+            comments = cl.media_comments(media_id, amount=0)  # amount=0 fetches all
+        elif amount:
+            comments = cl.media_comments(media_id, amount=amount)
+        else:
+            # Default behavior: fetch the first page of comments
+            comments = cl.media_comments(media_id)
+
         return {"comments": [comment.dict() for comment in comments]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch comments: {str(e)}")

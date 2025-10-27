@@ -8,61 +8,67 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 
 # سرویس اتوماسیون اینستاگرام
 
-یک سرویس REST API ساده، سبک و قدرتمند برای اتوماسیون فعالیت‌های اینستاگرام. این سرویس مدیریت چندین حساب کاربری، حل چالش‌های امنیتی اینستاگرام، و ارائه اندپوینت برای عملیات رایج مانند پاسخ به کامنت‌ها و ارسال دایرکت را فراهم می‌کند و برای اتصال آسان به ابزارهای اتومیشن مانند n8n طراحی شده است.
+یک سرویس REST API ساده، سبک و قدرتمند برای اتوماسیون فعالیت‌های اینستاگرام. این سرویس مدیریت چندین حساب کاربری، حل چالش‌های امنیتی، و ارائه اندپوینت برای عملیات رایج را فراهم می‌کند و برای اتصال آسان به ابزارهای اتومیشن مانند n8n طراحی شده است.
 
 ## 🎯 قابلیت‌های کلیدی
 
--   **مدیریت چند اکانت**: مدیریت همزمان چندین حساب کاربری اینستاگرام.
+-   **ورود چندگانه**: ورود با رمز عبور یا نشست (session) ذخیره‌شده.
 -   **حل چالش امنیتی**: قابلیت مدیریت چالش‌های لاگین (Challenge) از طریق API.
--   **دریافت کامنت‌ها**: دریافت آخرین کامنت‌های یک پست مشخص.
--   **پاسخ به کامنت**: ریپلای خودکار به یک کامنت خاص.
--   **ارسال دایرکت**: ارسال پیام مستقیم (DM) به هر کاربر.
--   **مدیریت نشست پایدار**: نشست‌ها در فایل `accounts.json` ذخیره می‌شوند تا از لاگین مکرر جلوگیری شود.
+-   **دریافت کامنت با فیلتر**: دریافت تمام یا تعداد مشخصی از آخرین کامنت‌ها.
+-   **مدیریت نشست پایدار**: نشست‌ها در فایل `accounts.json` ذخیره می‌شوند.
 -   **کنترل نرخ درخواست**: دارای محدودیت‌های هوشمند برای جلوگیری از مسدود شدن اکانت.
--   **جلوگیری از پاسخ تکراری**: تاریخچه پاسخ‌ها در `replied.json` ذخیره می‌شود.
 
-## 🧰 نصب و اجرا روی سرور
+## 🧰 نصب و اجرا
 
-### پیش‌نیازها
--   سرور (ترجیحاً Debian/Ubuntu)
--   `git`
-
-### مراحل نصب
-اسکریپت `install.sh` تمام وابستگی‌ها، از جمله پایتون و کتابخانه‌های مورد نیاز را به صورت خودکار نصب می‌کند.
+اسکریپت `install.sh` تمام وابستگی‌ها را به صورت خودکار نصب می‌کند.
 
 ۱. **کلون کردن پروژه:**
    ```bash
-   # پروژه را در مسیر دلخواه خود کلون کنید، برای مثال /srv
    git clone https://github.com/YOUR_USERNAME/insta_service.git /srv/insta_service
    ```
 
-۲. **اجرای اسکریپت نصب خودکار:**
+۲. **اجرای اسکریپت نصب:**
    ```bash
    bash /srv/insta_service/install.sh
    ```
 
 ۳. **اجرای سرویس:**
-   برای اجرای پایدار سرویس در پس‌زمینه، از `nohup` استفاده کنید:
    ```bash
-   # به مسیر پروژه بروید
    cd /srv/insta_service
-   # محیط مجازی را فعال کنید
    source venv/bin/activate
-   # سرویس را اجرا کنید
    nohup uvicorn main:app --host 0.0.0.0 --port 8008 &
    ```
-   سرویس روی آدرس `http://YOUR_SERVER_IP:8008` در دسترس خواهد بود.
 
 ## 📡 راهنمای کامل API
 
 ### `POST /login`
-ورود به حساب کاربری اینستاگرام.
+ورود به حساب کاربری اینستاگرام با استفاده از رمز عبور یا نشست (session).
 
-**بدنه درخواست (Request Body):**
+**۱. ورود با رمز عبور:**
 ```json
 {
   "username": "my_insta_account",
   "password": "my_secret_password"
+}
+```
+
+**۲. ورود با نشست (JSON String):**
+```json
+{
+  "username": "my_insta_account",
+  "session_json": "{\"sessionid\": \"...\", \"ds_user_id\": \"...\", ...}"
+}
+```
+
+**۳. ورود با نشست (JSON Object):**
+```json
+{
+  "username": "my_insta_account",
+  "session_dict": {
+    "sessionid": "...",
+    "ds_user_id": "...",
+    "csrftoken": "..."
+  }
 }
 ```
 
@@ -74,21 +80,18 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 }
 ```
 
-**پاسخ در صورت نیاز به چالش (401 Unauthorized):**
-این پاسخ به این معناست که اینستاگرام نیاز به تایید هویت دارد.
+**پاسخ ناموفق (403 Forbidden):**
+در صورتی که نشست نامعتبر یا منقضی باشد.
 ```json
 {
-  "detail": {
-    "message": "Challenge required. Please solve the challenge and use the /challenge/resolve endpoint.",
-    "username": "my_insta_account"
-  }
+  "detail": "The provided session is invalid or expired."
 }
 ```
 
 ### `POST /challenge/resolve`
-حل چالش امنیتی با استفاده از کد تاییدی که به ایمیل یا شماره تلفن شما ارسال شده است.
+حل چالش امنیتی با کد تایید ارسال‌شده.
 
-**بدنه درخواست (Request Body):**
+**بدنه درخواست:**
 ```json
 {
   "username": "my_insta_account",
@@ -96,97 +99,45 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 }
 ```
 
-**پاسخ موفق (200 OK):**
-```json
-{
-  "status": "success",
-  "username": "my_insta_account",
-  "message": "Challenge resolved and logged in successfully."
-}
-```
-
-**پاسخ ناموفق (404 Not Found):**
-```json
-{
-  "detail": "No active challenge found for user 'my_insta_account'."
-}
-```
-
 ### `GET /comments`
-دریافت کامنت‌های یک پست.
+دریافت کامنت‌های یک پست با قابلیت فیلترینگ.
 
-**پارامترها (Query Parameters):**
--   `username`: اکانتی که برای ارسال درخواست استفاده می‌شود.
--   `url`: آدرس کامل پست اینستاگرام.
+**پارامترها:**
+-   `username` (string, required): اکانت مورد استفاده.
+-   `url` (string, required): آدرس پست.
+-   `amount` (integer, optional): تعداد کامنت‌های آخر که باید دریافت شوند.
+-   `fetch_all` (boolean, optional): اگر `true` باشد، تمام کامنت‌ها دریافت می‌شوند.
 
-**نمونه درخواست:**
-`GET http://YOUR_IP:8008/comments?username=my_insta_account&url=https://www.instagram.com/p/Cxyz123abc/`
+**مثال ۱: دریافت ۲۰ کامنت آخر**
+`GET .../comments?username=...&url=...&amount=20`
 
-**پاسخ موفق (200 OK):**
-```json
-{
-  "comments": [
-    {
-      "pk": "179...",
-      "text": "This is a great post!",
-      "user": { "pk": "123...", "username": "some_user" },
-      "created_at_utc": "..."
-    }
-  ]
-}
-```
+**مثال ۲: دریافت همه کامنت‌ها**
+`GET .../comments?username=...&url=...&fetch_all=true`
+
 
 ### `POST /reply`
 پاسخ به یک کامنت.
 
-**بدنه درخواست (Request Body):**
+**بدنه درخواست:**
 ```json
 {
   "username": "my_insta_account",
   "comment_id": "179...",
-  "text": "Thanks for your comment! 🙌"
-}
-```
-
-**پاسخ موفق (200 OK):**
-```json
-{
-  "status": "success",
-  "message": "Replied to comment 179..."
+  "text": "Thanks! 🙌"
 }
 ```
 
 ### `POST /dm`
 ارسال پیام دایرکت.
 
-**بدنه درخواست (Request Body):**
+**بدنه درخواست:**
 ```json
 {
   "username": "my_insta_account",
   "target_username": "some_user",
-  "message": "Hello, we saw your comment and wanted to reach out."
+  "message": "Hello there!"
 }
 ```
-
-**پاسخ موفق (200 OK):**
-```json
-{
-  "status": "success",
-  "message": "DM sent to some_user"
-}
-```
-
-## 🧩 راهنمای پیشرفته اتصال به n8n
-برای مدیریت کامل فرآیند لاگین (شامل حل چالش) در n8n، می‌توانید از یک **IF Node** استفاده کنید.
-
-1.  **HTTP Request (Login):** یک نود برای ارسال درخواست به `/login` بسازید.
-2.  **IF Node:** خروجی نود لاگین را بررسی کنید.
-    -   **شرط:** `{{ $json.status }}` برابر با `success` است یا خیر.
-    -   اگر `true` بود، به مسیر اصلی ورک‌فلو (مثلاً دریافت کامنت‌ها) بروید.
-    -   اگر `false` بود، یعنی نیاز به حل چالش دارید.
-3.  **HTTP Request (Resolve Challenge):** در مسیر `false`، یک نود دیگر برای ارسال کد تایید به `/challenge/resolve` قرار دهید. (می‌توانید کد را به صورت دستی یا از طریق یک نود دیگر دریافت کنید).
-
-این الگو تضمین می‌کند که ورک‌فلوی شما حتی در صورت بروز چالش امنیتی نیز به درستی کار کند.
 
 </div>
 
@@ -196,57 +147,63 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 
 ## 🎯 Core Features
 
--   **Multi-Account Management**: Handle multiple Instagram account sessions simultaneously.
+-   **Flexible Login**: Authenticate via password or a pre-saved session.
 -   **Challenge Resolution**: Built-in API flow to handle Instagram's login challenges.
--   **Comment Fetching**: Get the latest comments from any public post.
--   **Comment Replies**: Reply to a specific comment.
--   **Direct Messages**: Send a DM to any Instagram user.
--   **Persistent Sessions**: Sessions are stored in `accounts.json` to avoid repeated logins.
+-   **Paginated Comment Fetching**: Retrieve all comments or a specific number of recent ones.
+-   **Persistent Sessions**: Sessions are stored locally in `accounts.json`.
 -   **Rate Limiting**: Smart delays and limits to prevent account bans.
--   **Duplicate Prevention**: Reply history is tracked in `replied.json`.
 
 ## 🧰 Installation and Deployment
 
-### Prerequisites
--   A server (Debian/Ubuntu recommended)
--   `git`
-
-### Installation Steps
-The `install.sh` script automates the entire setup, including Python and all dependencies.
+The `install.sh` script automates the entire setup.
 
 1.  **Clone the repository:**
     ```bash
-    # Clone the project into your desired path, e.g., /srv
     git clone https://github.com/YOUR_USERNAME/insta_service.git /srv/insta_service
     ```
 
-2.  **Run the automated installation script:**
+2.  **Run the installation script:**
     ```bash
     bash /srv/insta_service/install.sh
     ```
 
 3.  **Run the service:**
-    For persistent background execution, use `nohup`.
     ```bash
-    # Navigate to the project directory
     cd /srv/insta_service
-    # Activate the virtual environment
     source venv/bin/activate
-    # Run the service
     nohup uvicorn main:app --host 0.0.0.0 --port 8008 &
     ```
-    The service will be available at `http://YOUR_SERVER_IP:8008`.
 
 ## 📡 Full API Reference
 
 ### `POST /login`
-Logs into an Instagram account.
+Logs into an Instagram account using a password or a session.
 
-**Request Body:**
+**1. Login with Password:**
 ```json
 {
   "username": "my_insta_account",
   "password": "my_secret_password"
+}
+```
+
+**2. Login with Session (JSON String):**
+```json
+{
+  "username": "my_insta_account",
+  "session_json": "{\"sessionid\": \"...\", \"ds_user_id\": \"...\", ...}"
+}
+```
+
+**3. Login with Session (JSON Object):**
+```json
+{
+  "username": "my_insta_account",
+  "session_dict": {
+    "sessionid": "...",
+    "ds_user_id": "...",
+    "csrftoken": "..."
+  }
 }
 ```
 
@@ -258,19 +215,16 @@ Logs into an Instagram account.
 }
 ```
 
-**Challenge Required Response (401 Unauthorized):**
-Indicates that Instagram requires identity verification.
+**Error Response (403 Forbidden):**
+Returned if the provided session is invalid or expired.
 ```json
 {
-  "detail": {
-    "message": "Challenge required. Please solve the challenge and use the /challenge/resolve endpoint.",
-    "username": "my_insta_account"
-  }
+  "detail": "The provided session is invalid or expired."
 }
 ```
 
 ### `POST /challenge/resolve`
-Resolves a login challenge using the verification code sent to your email or phone.
+Resolves a login challenge using a verification code.
 
 **Request Body:**
 ```json
@@ -280,45 +234,21 @@ Resolves a login challenge using the verification code sent to your email or pho
 }
 ```
 
-**Success Response (200 OK):**
-```json
-{
-  "status": "success",
-  "username": "my_insta_account",
-  "message": "Challenge resolved and logged in successfully."
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "detail": "No active challenge found for user 'my_insta_account'."
-}
-```
-
 ### `GET /comments`
-Fetches comments for a post.
+Fetches comments for a post with optional pagination.
 
 **Query Parameters:**
--   `username`: The account to use for the request.
--   `url`: The full URL of the Instagram post.
+-   `username` (string, required): The account to use for the request.
+-   `url` (string, required): The URL of the post.
+-   `amount` (integer, optional): The number of recent comments to fetch.
+-   `fetch_all` (boolean, optional): If `true`, fetches all comments.
 
-**Example Request:**
-`GET http://YOUR_IP:8008/comments?username=my_insta_account&url=https://www.instagram.com/p/Cxyz123abc/`
+**Example 1: Get the last 20 comments**
+`GET .../comments?username=...&url=...&amount=20`
 
-**Success Response (200 OK):**
-```json
-{
-  "comments": [
-    {
-      "pk": "179...",
-      "text": "This is a great post!",
-      "user": { "pk": "123...", "username": "some_user" },
-      "created_at_utc": "..."
-    }
-  ]
-}
-```
+**Example 2: Get all comments**
+`GET .../comments?username=...&url=...&fetch_all=true`
+
 
 ### `POST /reply`
 Replies to a comment.
@@ -328,15 +258,7 @@ Replies to a comment.
 {
   "username": "my_insta_account",
   "comment_id": "179...",
-  "text": "Thanks for your comment! 🙌"
-}
-```
-
-**Success Response (200 OK):**
-```json
-{
-  "status": "success",
-  "message": "Replied to comment 179..."
+  "text": "Thanks! 🙌"
 }
 ```
 
@@ -348,26 +270,6 @@ Sends a direct message.
 {
   "username": "my_insta_account",
   "target_username": "some_user",
-  "message": "Hello, we saw your comment and wanted to reach out."
+  "message": "Hello there!"
 }
 ```
-
-**Success Response (200 OK):**
-```json
-{
-  "status": "success",
-  "message": "DM sent to some_user"
-}
-```
-
-## 🧩 Advanced n8n Integration Guide
-To fully manage the login flow (including challenge resolution) in n8n, you can use an **IF Node**.
-
-1.  **HTTP Request (Login):** Create a node to send the request to `/login`. Configure it to "Never Error" so you can inspect the output.
-2.  **IF Node:** Check the output of the login node.
-    -   **Condition:** `{{ $json.status }}` is equal to `success`.
-    -   If `true`, proceed with the main workflow (e.g., fetching comments).
-    -   If `false`, it means a challenge is required.
-3.  **HTTP Request (Resolve Challenge):** On the `false` path, add another node to send the verification code to `/challenge/resolve`. You can get the code manually or from another automated source.
-
-This pattern ensures your workflow is robust and can handle security challenges gracefully.
