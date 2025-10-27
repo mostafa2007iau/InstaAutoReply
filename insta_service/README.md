@@ -13,15 +13,14 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 ## 🎯 قابلیت‌های کلیدی
 
 -   **ورود چندگانه**: ورود با رمز عبور یا نشست (session) ذخیره‌شده.
+-   **نصب آسان**: اسکریپت نصب هوشمند با قابلیت راه‌اندازی به عنوان سرویس `systemd`.
 -   **حل چالش امنیتی**: قابلیت مدیریت چالش‌های لاگین (Challenge) از طریق API.
 -   **دریافت کامنت با فیلتر**: دریافت تمام یا تعداد مشخصی از آخرین کامنت‌ها.
 -   **شمارش پاسخ مالک**: قابلیت شمارش پاسخ‌های صاحب پست به هر کامنت.
--   **مدیریت نشست پایدار**: نشست‌ها در فایل `accounts.json` ذخیره می‌شوند.
--   **کنترل نرخ درخواست**: دارای محدودیت‌های هوشمند برای جلوگیری از مسدود شدن اکانت.
 
 ## 🧰 نصب و اجرا
 
-اسکریپت `install.sh` تمام وابستگی‌ها را به صورت خودکار نصب می‌کند.
+اسکریپت `install.sh` به صورت هوشمند محیط را تشخیص داده و نصب را انجام می‌دهد.
 
 ۱. **کلون کردن پروژه:**
    ```bash
@@ -32,96 +31,97 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
    ```bash
    bash /srv/insta_service/install.sh
    ```
+   اسکریپت به صورت خودکار سرویس `systemd` را راه‌اندازی می‌کند تا برنامه همیشه در حال اجرا باشد.
 
-۳. **اجرای سرویس:**
-   ```bash
-   cd /srv/insta_service
-   source venv/bin/activate
-   nohup uvicorn main:app --host 0.0.0.0 --port 8008 &
-   ```
+**مدیریت سرویس:**
+-   **بررسی وضعیت:** `sudo systemctl status insta-auto-reply.service`
+-   **مشاهده لاگ‌ها:** `sudo journalctl -u insta-auto-reply.service -f`
 
 ## 📡 راهنمای کامل API
 
 ### `POST /login`
-ورود به حساب کاربری اینستاگرام با استفاده از رمز عبور یا نشست (session).
+ورود به حساب کاربری. در صورت موفقیت، نشست برای استفاده‌های بعدی ذخیره می‌شود.
 
-**۱. ورود با رمز عبور:**
+**پاسخ موفق (200 OK):**
 ```json
 {
-  "username": "my_insta_account",
-  "password": "my_secret_password"
+  "status": "success",
+  "username": "my_insta_account"
 }
 ```
-
-**۲. ورود با نشست (JSON String):**
-```json
-{
-  "username": "my_insta_account",
-  "session_json": "{\"sessionid\": \"...\", \"ds_user_id\": \"...\", ...}"
-}
-```
-
-**۳. ورود با نشست (JSON Object):**
-```json
-{
-  "username": "my_insta_account",
-  "session_dict": {
-    "sessionid": "...",
-    "ds_user_id": "...",
-    "csrftoken": "..."
-  }
-}
-```
+-   `status`: وضعیت عملیات.
+-   `username`: نام کاربری اکانت لاگین‌شده.
 
 ### `POST /challenge/resolve`
-حل چالش امنیتی با کد تایید ارسال‌شده.
+حل چالش امنیتی با کد تایید.
 
-**بدنه درخواست:**
+**پاسخ موفق (200 OK):**
 ```json
 {
+  "status": "success",
   "username": "my_insta_account",
-  "code": "123456"
+  "message": "Challenge resolved and logged in successfully."
 }
 ```
+-   `message`: پیام تایید موفقیت‌آمیز بودن عملیات.
 
 ### `GET /comments`
-دریافت کامنت‌های یک پست با قابلیت فیلترینگ.
-
-**پارامترها:**
--   `username` (string, required): اکانت مورد استفاده.
--   `url` (string, required): آدرس پست.
--   `amount` (integer, optional): تعداد کامنت‌های آخر که باید دریافت شوند.
--   `fetch_all` (boolean, optional): اگر `true` باشد، تمام کامنت‌ها دریافت می‌شوند.
--   `include_owner_reply_count` (boolean, optional): اگر `true` باشد، تعداد پاسخ‌های مالک پست به هر کامنت شمرده می‌شود.
+دریافت کامنت‌های یک پست.
 
 **مثال: دریافت ۱۰ کامنت آخر به همراه تعداد پاسخ مالک**
 `GET .../comments?username=...&url=...&amount=10&include_owner_reply_count=true`
 
-**نمونه پاسخ:**
+**پاسخ موفق (200 OK):**
 ```json
 {
   "comments": [
     {
       "pk": "179...",
       "text": "Great post!",
-      "user": { "username": "some_user" },
+      "user": { "pk": "123...", "username": "some_user" },
       "owner_reply_count": 1
-    },
-    {
-      "pk": "180...",
-      "text": "Nice one!",
-      "user": { "username": "another_user" },
-      "owner_reply_count": 0
     }
   ]
 }
 ```
+-   `comments`: لیستی از آبجکت‌های کامنت. هر آبجکت شامل `pk` (شناسه کامنت)، `text` (متن)، و `user` (اطلاعات کاربر) است.
+-   `owner_reply_count`: (اختیاری) تعداد پاسخ‌های مالک پست به این کامنت.
 
 ### `POST /reply`
 پاسخ به یک کامنت.
 
+**پاسخ موفق (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Replied to comment 179..."
+}
+```
+-   `message`: پیام تایید ارسال پاسخ.
+
 ### `POST /dm`
 ارسال پیام دایرکت.
+
+**پاسخ موفق (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "DM sent to some_user"
+}
+```
+-   `message`: پیام تایید ارسال دایرکت.
+
+### `GET /status`
+بررسی وضعیت سرویس.
+
+**پاسخ موفق (200 OK):**
+```json
+{
+  "status": "ok",
+  "logged_in_accounts": ["account1", "account2"]
+}
+```
+-   `logged_in_accounts`: لیستی از تمام اکانت‌هایی که با موفقیت لاگین کرده‌اند.
 
 </div>
 
@@ -132,15 +132,14 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 ## 🎯 Core Features
 
 -   **Flexible Login**: Authenticate via password or a pre-saved session.
+-   **Robust Installation**: Smart `install.sh` script that sets up a `systemd` service for persistence.
 -   **Challenge Resolution**: Built-in API flow to handle Instagram's login challenges.
--   **Paginated Comment Fetching**: Retrieve all comments or a specific number of recent ones.
--   **Owner Reply Count**: Optionally count replies from the post owner on each comment.
+-   **Advanced Comment Fetching**: Paginate comments and count replies from the post owner.
 -   **Persistent Sessions**: Sessions are stored locally in `accounts.json`.
--   **Rate Limiting**: Smart delays and limits to prevent account bans.
 
 ## 🧰 Installation and Deployment
 
-The `install.sh` script automates the entire setup.
+The smart `install.sh` script automates the entire setup.
 
 1.  **Clone the repository:**
     ```bash
@@ -151,81 +150,94 @@ The `install.sh` script automates the entire setup.
     ```bash
     bash /srv/insta_service/install.sh
     ```
+    The script will automatically configure and enable a `systemd` service to keep the application running.
 
-3.  **Run the service:**
-    ```bash
-    cd /srv/insta_service
-    source venv/bin/activate
-    nohup uvicorn main:app --host 0.0.0.0 --port 8008 &
-    ```
+**Managing the Service:**
+-   **Check Status:** `sudo systemctl status insta-auto-reply.service`
+-   **View Logs:** `sudo journalctl -u insta-auto-reply.service -f`
 
 ## 📡 Full API Reference
 
 ### `POST /login`
-Logs into an Instagram account using a password or a session.
+Logs into an account. On success, the session is saved for future use.
 
-**1. Login with Password:**
+**Success Response (200 OK):**
 ```json
 {
-  "username": "my_insta_account",
-  "password": "my_secret_password"
+  "status": "success",
+  "username": "my_insta_account"
 }
 ```
-
-**2. Login with Session (JSON String or Object):**
-```json
-{
-  "username": "my_insta_account",
-  "session_json": "{\"sessionid\": \"...\"}"
-}
-```
+-   `status`: The result of the operation.
+-   `username`: The username of the logged-in account.
 
 ### `POST /challenge/resolve`
-Resolves a login challenge using a verification code.
+Resolves a login challenge with a verification code.
 
-**Request Body:**
+**Success Response (200 OK):**
 ```json
 {
+  "status": "success",
   "username": "my_insta_account",
-  "code": "123456"
+  "message": "Challenge resolved and logged in successfully."
 }
 ```
+-   `message`: A confirmation that the challenge was resolved.
 
 ### `GET /comments`
-Fetches comments for a post with optional pagination and owner reply count.
-
-**Query Parameters:**
--   `username` (string, required): The account to use for the request.
--   `url` (string, required): The URL of the post.
--   `amount` (integer, optional): The number of recent comments to fetch.
--   `fetch_all` (boolean, optional): If `true`, fetches all comments.
--   `include_owner_reply_count` (boolean, optional): If `true`, counts replies from the post owner for each comment.
+Fetches comments for a post.
 
 **Example: Get the last 10 comments and include the owner's reply count**
 `GET .../comments?username=...&url=...&amount=10&include_owner_reply_count=true`
 
-**Example Response:**
+**Success Response (200 OK):**
 ```json
 {
   "comments": [
     {
       "pk": "179...",
       "text": "Great post!",
-      "user": { "username": "some_user" },
+      "user": { "pk": "123...", "username": "some_user" },
       "owner_reply_count": 1
-    },
-    {
-      "pk": "180...",
-      "text": "Nice one!",
-      "user": { "username": "another_user" },
-      "owner_reply_count": 0
     }
   ]
 }
 ```
+-   `comments`: A list of comment objects. Each object contains details like `pk` (comment ID), `text`, and `user` info.
+-   `owner_reply_count`: (Optional) The number of replies made by the post's owner to this comment.
 
 ### `POST /reply`
 Replies to a comment.
 
+**Success Response (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Replied to comment 179..."
+}
+```
+-   `message`: A confirmation that the reply was sent.
+
 ### `POST /dm`
 Sends a direct message.
+
+**Success Response (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "DM sent to some_user"
+}
+```
+-   `message`: A confirmation that the DM was sent.
+
+### `GET /status`
+Checks the service status.
+
+**Success Response (200 OK):**
+```json
+{
+  "status": "ok",
+  "logged_in_accounts": ["account1", "account2"]
+}
+```
+-   `logged_in_accounts`: A list of all usernames that have an active session.
