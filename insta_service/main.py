@@ -5,14 +5,12 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from instagrapi import Client
-from instagrapi.exceptions import LoginRequired
-SCRIPT_DIR = Path(__file__).resolve().parent
-
+from instagrapi.exceptions import LoginRequired, ChallengeRequired
 
 # --- Configuration ---
-ACCOUNTS_FILE = SCRIPT_DIR / "accounts.json"
-REPLIED_FILE = SCRIPT_DIR / "replied.json"
-
+ACCOUNTS_FILE = Path("accounts.json")
+REPLIED_FILE = Path("replied.json")
+CHALLENGES_FILE = Path("challenges.json")
 RATE_LIMIT_DELAY = 5  # seconds
 HOURLY_REPLY_LIMIT = 30
 
@@ -27,6 +25,10 @@ app = FastAPI(
 class LoginPayload(BaseModel):
     username: str
     password: str
+
+class ChallengePayload(BaseModel):
+    username: str
+    code: str
 
 class ReplyPayload(BaseModel):
     username: str
@@ -62,6 +64,14 @@ def load_accounts():
 def save_accounts(accounts_data):
     """Saves all account sessions."""
     save_json_data(ACCOUNTS_FILE, accounts_data)
+
+def load_challenges():
+    """Loads all pending challenges."""
+    return load_json_data(CHALLENGES_FILE)
+
+def save_challenges(challenges_data):
+    """Saves all pending challenges."""
+    save_json_data(CHALLENGES_FILE, challenges_data)
 
 def load_replied_log():
     """Loads the log of replied comments."""
@@ -100,6 +110,8 @@ async def startup_event():
         save_accounts({})
     if not REPLIED_FILE.exists():
         save_replied_log([])
+    if not CHALLENGES_FILE.exists():
+        save_challenges({})
 
 # --- API Endpoints ---
 
@@ -111,7 +123,10 @@ def get_status():
 
 @app.post("/login", summary="Login an Instagram Account")
 def login(payload: LoginPayload):
-    """Logs in an Instagram account and saves its session."""
+    """
+    Logs in an Instagram account.
+    If a challenge is required, it saves the temporary state for resolution.
+    """
     cl = Client()
     try:
         cl.login(payload.username, payload.password)
@@ -119,8 +134,46 @@ def login(payload: LoginPayload):
         accounts[payload.username] = cl.get_settings()
         save_accounts(accounts)
         return {"status": "success", "username": payload.username}
+    except ChallengeRequired as e:
+        challenges = load_challenges()
+        challenges[payload.username] = cl.get_settings()
+        save_challenges(challenges)
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "message": "Challenge required. Please solve the challenge and use the /challenge/resolve endpoint.",
+                "username": payload.username,
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {str(e)}")
+
+@app.post("/challenge/resolve", summary="Resolve a Login Challenge")
+def resolve_challenge(payload: ChallengePayload):
+    """
+    Resolves a login challenge using a verification code.
+    """
+    challenges = load_challenges()
+    if payload.username not in challenges:
+        raise HTTPException(status_code=404, detail=f"No active challenge found for user '{payload.username}'.")
+
+    cl = Client()
+    cl.set_settings(challenges[payload.username])
+
+    try:
+        cl.challenge_code_handler(payload.code)
+
+        # On success, save the final session and remove the pending challenge
+        accounts = load_accounts()
+        accounts[payload.username] = cl.get_settings()
+        save_accounts(accounts)
+
+        del challenges[payload.username]
+        save_challenges(challenges)
+
+        return {"status": "success", "username": payload.username, "message": "Challenge resolved and logged in successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to resolve challenge: {str(e)}")
 
 @app.get("/accounts", summary="List Logged-in Accounts")
 def get_accounts():
