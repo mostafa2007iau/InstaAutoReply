@@ -218,27 +218,42 @@ def get_comments(
     username: str = Query(...),
     url: str = Query(...),
     amount: Optional[int] = Query(None, description="Number of recent comments to fetch."),
-    fetch_all: bool = Query(False, description="Set to true to fetch all comments.")
+    fetch_all: bool = Query(False, description="Set to true to fetch all comments."),
+    include_owner_reply_count: bool = Query(False, description="Include the count of replies from the post owner.")
 ):
     """
-    Fetches comments for a specific Instagram post.
-    - **username**: The account to use for the request.
+    Fetches comments for a post with optional owner reply count.
+    - **username**: The account to use.
     - **url**: The URL of the Instagram post.
-    - **amount**: Fetches the specified number of the most recent comments.
-    - **fetch_all**: If true, fetches all comments on the post.
+    - **amount**: Number of recent comments to fetch.
+    - **fetch_all**: If true, fetches all comments.
+    - **include_owner_reply_count**: If true, adds a count of replies from the post owner to each comment.
     """
     cl = get_client(username)
     try:
-        media_id = cl.media_id(cl.media_pk_from_url(url))
-        if fetch_all:
-            comments = cl.media_comments(media_id, amount=0)  # amount=0 fetches all
-        elif amount:
-            comments = cl.media_comments(media_id, amount=amount)
-        else:
-            # Default behavior: fetch the first page of comments
-            comments = cl.media_comments(media_id)
+        media_pk = cl.media_pk_from_url(url)
+        media_id = cl.media_id(media_pk)
 
-        return {"comments": [comment.dict() for comment in comments]}
+        # Determine comment fetching parameters
+        comment_amount = 0 if fetch_all else amount if amount is not None else 20 # Default to 20 if no amount
+        comments = cl.media_comments(media_id, amount=comment_amount)
+
+        comment_list = [comment.dict() for comment in comments]
+
+        if include_owner_reply_count:
+            post_info = cl.media_info(media_pk)
+            owner_id = post_info.user.pk
+
+            for comment in comment_list:
+                # Ensure the key exists before fetching replies
+                if 'pk' in comment:
+                    replies = cl.comment_replies(comment['pk'])
+                    owner_reply_count = sum(1 for reply in replies if reply.user.pk == owner_id)
+                    comment['owner_reply_count'] = owner_reply_count
+                else:
+                    comment['owner_reply_count'] = 0
+
+        return {"comments": comment_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch comments: {str(e)}")
 

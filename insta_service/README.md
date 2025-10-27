@@ -15,6 +15,7 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 -   **ورود چندگانه**: ورود با رمز عبور یا نشست (session) ذخیره‌شده.
 -   **حل چالش امنیتی**: قابلیت مدیریت چالش‌های لاگین (Challenge) از طریق API.
 -   **دریافت کامنت با فیلتر**: دریافت تمام یا تعداد مشخصی از آخرین کامنت‌ها.
+-   **شمارش پاسخ مالک**: قابلیت شمارش پاسخ‌های صاحب پست به هر کامنت.
 -   **مدیریت نشست پایدار**: نشست‌ها در فایل `accounts.json` ذخیره می‌شوند.
 -   **کنترل نرخ درخواست**: دارای محدودیت‌های هوشمند برای جلوگیری از مسدود شدن اکانت.
 
@@ -72,22 +73,6 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 }
 ```
 
-**پاسخ موفق (200 OK):**
-```json
-{
-  "status": "success",
-  "username": "my_insta_account"
-}
-```
-
-**پاسخ ناموفق (403 Forbidden):**
-در صورتی که نشست نامعتبر یا منقضی باشد.
-```json
-{
-  "detail": "The provided session is invalid or expired."
-}
-```
-
 ### `POST /challenge/resolve`
 حل چالش امنیتی با کد تایید ارسال‌شده.
 
@@ -107,37 +92,36 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 -   `url` (string, required): آدرس پست.
 -   `amount` (integer, optional): تعداد کامنت‌های آخر که باید دریافت شوند.
 -   `fetch_all` (boolean, optional): اگر `true` باشد، تمام کامنت‌ها دریافت می‌شوند.
+-   `include_owner_reply_count` (boolean, optional): اگر `true` باشد، تعداد پاسخ‌های مالک پست به هر کامنت شمرده می‌شود.
 
-**مثال ۱: دریافت ۲۰ کامنت آخر**
-`GET .../comments?username=...&url=...&amount=20`
+**مثال: دریافت ۱۰ کامنت آخر به همراه تعداد پاسخ مالک**
+`GET .../comments?username=...&url=...&amount=10&include_owner_reply_count=true`
 
-**مثال ۲: دریافت همه کامنت‌ها**
-`GET .../comments?username=...&url=...&fetch_all=true`
-
+**نمونه پاسخ:**
+```json
+{
+  "comments": [
+    {
+      "pk": "179...",
+      "text": "Great post!",
+      "user": { "username": "some_user" },
+      "owner_reply_count": 1
+    },
+    {
+      "pk": "180...",
+      "text": "Nice one!",
+      "user": { "username": "another_user" },
+      "owner_reply_count": 0
+    }
+  ]
+}
+```
 
 ### `POST /reply`
 پاسخ به یک کامنت.
 
-**بدنه درخواست:**
-```json
-{
-  "username": "my_insta_account",
-  "comment_id": "179...",
-  "text": "Thanks! 🙌"
-}
-```
-
 ### `POST /dm`
 ارسال پیام دایرکت.
-
-**بدنه درخواست:**
-```json
-{
-  "username": "my_insta_account",
-  "target_username": "some_user",
-  "message": "Hello there!"
-}
-```
 
 </div>
 
@@ -150,6 +134,7 @@ A simple, lightweight, and robust REST API service designed to automate Instagra
 -   **Flexible Login**: Authenticate via password or a pre-saved session.
 -   **Challenge Resolution**: Built-in API flow to handle Instagram's login challenges.
 -   **Paginated Comment Fetching**: Retrieve all comments or a specific number of recent ones.
+-   **Owner Reply Count**: Optionally count replies from the post owner on each comment.
 -   **Persistent Sessions**: Sessions are stored locally in `accounts.json`.
 -   **Rate Limiting**: Smart delays and limits to prevent account bans.
 
@@ -187,39 +172,11 @@ Logs into an Instagram account using a password or a session.
 }
 ```
 
-**2. Login with Session (JSON String):**
+**2. Login with Session (JSON String or Object):**
 ```json
 {
   "username": "my_insta_account",
-  "session_json": "{\"sessionid\": \"...\", \"ds_user_id\": \"...\", ...}"
-}
-```
-
-**3. Login with Session (JSON Object):**
-```json
-{
-  "username": "my_insta_account",
-  "session_dict": {
-    "sessionid": "...",
-    "ds_user_id": "...",
-    "csrftoken": "..."
-  }
-}
-```
-
-**Success Response (200 OK):**
-```json
-{
-  "status": "success",
-  "username": "my_insta_account"
-}
-```
-
-**Error Response (403 Forbidden):**
-Returned if the provided session is invalid or expired.
-```json
-{
-  "detail": "The provided session is invalid or expired."
+  "session_json": "{\"sessionid\": \"...\"}"
 }
 ```
 
@@ -235,41 +192,40 @@ Resolves a login challenge using a verification code.
 ```
 
 ### `GET /comments`
-Fetches comments for a post with optional pagination.
+Fetches comments for a post with optional pagination and owner reply count.
 
 **Query Parameters:**
 -   `username` (string, required): The account to use for the request.
 -   `url` (string, required): The URL of the post.
 -   `amount` (integer, optional): The number of recent comments to fetch.
 -   `fetch_all` (boolean, optional): If `true`, fetches all comments.
+-   `include_owner_reply_count` (boolean, optional): If `true`, counts replies from the post owner for each comment.
 
-**Example 1: Get the last 20 comments**
-`GET .../comments?username=...&url=...&amount=20`
+**Example: Get the last 10 comments and include the owner's reply count**
+`GET .../comments?username=...&url=...&amount=10&include_owner_reply_count=true`
 
-**Example 2: Get all comments**
-`GET .../comments?username=...&url=...&fetch_all=true`
-
+**Example Response:**
+```json
+{
+  "comments": [
+    {
+      "pk": "179...",
+      "text": "Great post!",
+      "user": { "username": "some_user" },
+      "owner_reply_count": 1
+    },
+    {
+      "pk": "180...",
+      "text": "Nice one!",
+      "user": { "username": "another_user" },
+      "owner_reply_count": 0
+    }
+  ]
+}
+```
 
 ### `POST /reply`
 Replies to a comment.
 
-**Request Body:**
-```json
-{
-  "username": "my_insta_account",
-  "comment_id": "179...",
-  "text": "Thanks! 🙌"
-}
-```
-
 ### `POST /dm`
 Sends a direct message.
-
-**Request Body:**
-```json
-{
-  "username": "my_insta_account",
-  "target_username": "some_user",
-  "message": "Hello there!"
-}
-```
